@@ -155,12 +155,7 @@ def get_latest_downloaded_image():
     image_files = sorted(glob.glob(os.path.join(downloads_folder, "*.[pj][np]g")),
                          key=os.path.getctime, reverse=True)
     return image_files[0] if image_files else None
-
-import os
-from pathlib import Path
-import streamlit as st
-from natsort import natsorted
-
+    
 # --------------- Sidebar Controls ---------------
 st.sidebar.header("📁 PDF Processing")
 uploaded_pdf = st.sidebar.file_uploader("Select a PDF file", type=["pdf"], key="pdf_uploader_1")
