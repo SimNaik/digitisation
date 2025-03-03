@@ -622,7 +622,7 @@ with st.sidebar:
                         json.dump(page_data, f, indent=4)
                     st.rerun()
 
-                col_up, col_down, col_delete = st.columns(3)
+                col_up, col_down= st.columns(2)
                 with col_up:
                     if st.button(f"⬆️ Move Up {idx}", key=f"up_{idx}") and idx > 0:
                         page_data["lines"][idx - 1], page_data["lines"][idx] = page_data["lines"][idx], page_data["lines"][idx - 1]
@@ -632,12 +632,6 @@ with st.sidebar:
                 with col_down:
                     if st.button(f"⬇️ Move Down {idx}", key=f"down_{idx}") and idx < len(page_data["lines"]) - 1:
                         page_data["lines"][idx + 1], page_data["lines"][idx] = page_data["lines"][idx], page_data["lines"][idx + 1]
-                        with open(json_path, "w", encoding="utf-8") as f:
-                            json.dump(page_data, f, indent=4)
-                        st.rerun()
-                with col_delete:
-                    if st.button(f"🗑️ Delete {idx}", key=f"delete_{idx}"):
-                        del page_data["lines"][idx]
                         with open(json_path, "w", encoding="utf-8") as f:
                             json.dump(page_data, f, indent=4)
                         st.rerun()
