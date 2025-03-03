@@ -166,6 +166,7 @@ if uploaded_pdf is not None:
         process_pdf(uploaded_pdf)
 
 # --------------- Data Directories ---------------
+st.sidebar.markdown("---")
 st.sidebar.header("🗂 Data Directories")
 
 if "processed_json_dir" in st.session_state and "processed_image_dir" in st.session_state:
@@ -394,7 +395,7 @@ with st.sidebar:
             # If "Is the text a URL?" is ticked, convert the new_box_text to HTML format
             if st.session_state.get("is_url_new_box"):
                 new_box_text = f'<figure><img src="{new_box_text}" alt=""><figcaption></figcaption></figure>'
-                new_box = {"cnt": new_box_cnt, "text": new_box_text, "deleted": False}
+            new_box = {"cnt": new_box_cnt, "text": new_box_text}
             if insert_after == -1:
                 page_data["lines"].insert(0, new_box)
             else:
@@ -457,24 +458,23 @@ with col1:
                 json_width = first_entry.get("page_width", image.shape[1])
                 json_height = first_entry.get("page_height", image.shape[0])
 
-                
                 def draw_boxes(img, annotations):
                     img_copy = img.copy()
                     scale_x = img_copy.shape[1] / json_width
                     scale_y = img_copy.shape[0] / json_height
                     for idx, ann in enumerate(annotations):
-                        if ann.get("soft_delete", False):
+                         if ann.get("soft_delete", False):
                             color = (0, 0, 255)  # Blue for deleted annotations
                             # Strikethrough the text for soft-deleted annotations
                             text = f"~~{ann['text']}~~"  # Adding strikethrough in the text itself
-                        else:
+                         else:
                             color = (255, 0, 0)  # Red for active annotations
                             text = ann['text']
 
-                        if ann.get("deleted", False):
+                         if ann.get("deleted", False):
                             continue  # Skip this annotation if it is marked as deleted
-
-                        if "cnt" in ann:
+                    
+                         if "cnt" in ann:
                             pts = np.array(ann["cnt"], dtype=np.float32)
                             pts[:, 0] *= scale_x
                             pts[:, 1] *= scale_y
@@ -566,6 +566,8 @@ full_image = cv2.imread(image_path)
 temp_mmd_dir = os.path.join(os.path.expanduser("~"), "Desktop/automated/temp_mmd")
 os.makedirs(temp_mmd_dir, exist_ok=True)
 
+
+
 with st.sidebar:
     st.subheader("📦 Manage Annotations")
     if "lines" in page_data:
@@ -573,8 +575,7 @@ with st.sidebar:
             with st.expander(f"Box {idx}", expanded=False):
                 pts = np.array(annotation["cnt"], dtype=np.int32)
                 x, y, w, h = cv2.boundingRect(pts)
-
-                # Check if annotation is soft deleted
+                 #Check if annotation is soft deleted
                 if annotation.get("soft_delete", False):
                     st.markdown(f"~~Box {idx}~~: {annotation['text']}")  # Strike-through the text
                     st.write(f"❌ This annotation is deleted. Recover it below.")
@@ -584,27 +585,20 @@ with st.sidebar:
                             json.dump(page_data, f, indent=4)
                         st.rerun()
                     continue  # Skip further UI for deleted annotations
-
-                # Annotation editing controls
                 new_x = st.slider(f"X Pos {idx}", 0, page_info.get("page_width", 2068), x, key=f"x_{idx}")
                 new_y = st.slider(f"Y Pos {idx}", 0, page_info.get("page_height", 2924), y, key=f"y_{idx}")
                 new_w = st.slider(f"Width {idx}", 1, page_info.get("page_width", 2068) - new_x, w, key=f"w_{idx}")
                 new_h = st.slider(f"Height {idx}", 1, page_info.get("page_height", 2924) - new_y, h, key=f"h_{idx}")
                 new_text = st.text_area(f"Text {idx}", value=annotation["text"], key=f"text_{idx}")
-
-                # Update annotation if any changes detected
                 if (new_x != x or new_y != y or new_w != w or new_h != h or new_text != annotation["text"]):
-                    annotation["cnt"] = [
-                        [new_x, new_y], 
-                        [new_x, new_y + new_h], 
-                        [new_x + new_w, new_y + new_h], 
-                        [new_x + new_w, new_y]
-                    ]
+                    annotation["cnt"] = [[new_x, new_y],
+                                         [new_x, new_y + new_h],
+                                         [new_x + new_w, new_y + new_h],
+                                         [new_x + new_w, new_y]]
                     annotation["text"] = new_text
                     with open(json_path, "w", encoding="utf-8") as f:
                         json.dump(page_data, f, indent=4)
                     st.rerun()
-
                 # --- New Feature: Update Figure HTML with Caption ---
                 if re.search(r'<img\s+src="https?://[^"]+"', new_text):
                     existing_caption = annotation.get("caption", "")
@@ -621,16 +615,14 @@ with st.sidebar:
                         with open(json_path, "w", encoding="utf-8") as f:
                             json.dump(page_data, f, indent=4)
                         st.rerun()
-
-                # Soft Delete Button
+                         # Soft Delete Button
                 if st.button(f"🗑️ Soft Delete {idx}", key=f"soft_delete_{idx}"):
                     annotation["soft_delete"] = True
                     with open(json_path, "w", encoding="utf-8") as f:
                         json.dump(page_data, f, indent=4)
                     st.rerun()
 
-                # Movement buttons
-                col_up, col_down = st.columns(2)
+                col_up, col_down, col_delete = st.columns(3)
                 with col_up:
                     if st.button(f"⬆️ Move Up {idx}", key=f"up_{idx}") and idx > 0:
                         page_data["lines"][idx - 1], page_data["lines"][idx] = page_data["lines"][idx], page_data["lines"][idx - 1]
@@ -643,13 +635,50 @@ with st.sidebar:
                         with open(json_path, "w", encoding="utf-8") as f:
                             json.dump(page_data, f, indent=4)
                         st.rerun()
-
-                # Hard Delete Button
-                if st.button(f"🗑️ Delete {idx}", key=f"delete_{idx}"):
-                    del page_data["lines"][idx]
-                    with open(json_path, "w", encoding="utf-8") as f:
-                        json.dump(page_data, f, indent=4)
-                    st.rerun()
+                with col_delete:
+                    if st.button(f"🗑️ Delete {idx}", key=f"delete_{idx}"):
+                        del page_data["lines"][idx]
+                        with open(json_path, "w", encoding="utf-8") as f:
+                            json.dump(page_data, f, indent=4)
+                        st.rerun()
+                send_to_mathpix_flag = st.checkbox(f"📤 Send to Mathpix {idx}", key=f"mathpix_{idx}")
+                send_from_downloads_flag = st.checkbox(f"📥 Send Latest Downloaded Image {idx} to Mathpix", key=f"downloads_{idx}")
+                if send_to_mathpix_flag:
+                    cropped_path = os.path.join(temp_mmd_dir, f"cropped_{idx}.png")
+                    scale_x = full_image.shape[1] / page_info.get("page_width", full_image.shape[1])
+                    scale_y = full_image.shape[0] / page_info.get("page_height", full_image.shape[0])
+                    scaled_x = int(new_x * scale_x)
+                    scaled_y = int(new_y * scale_y)
+                    scaled_w = int(new_w * scale_x)
+                    scaled_h = int(new_h * scale_y)
+                    cropped_img = full_image[scaled_y:scaled_y + scaled_h, scaled_x:scaled_x + scaled_w]
+                    if cropped_img.shape[0] > 0 and cropped_img.shape[1] > 0:
+                        cv2.imwrite(cropped_path, cropped_img)
+                        st.write(f"✅ Saved cropped image: {cropped_path}")
+                        st.image(cropped_img, caption=f"📸 Cropped Image for Box {idx}", use_column_width=True)
+                    else:
+                        st.error(f"🚨 Error: Cropped image is empty for Box {idx}!")
+                    if st.button(f"🚀 Process Box {idx} with Mathpix", key=f"mathpix_button_{idx}"):
+                        with st.spinner("Processing with Mathpix..."):
+                            extracted_text = send_to_mathpix(cropped_path)
+                        if "Error" in extracted_text:
+                            st.error(f"⚠️ Mathpix API Error: {extracted_text}")
+                        else:
+                            st.text_area(f"Mathpix Extracted Text {idx}", value=extracted_text, height=100, key=f"mathpix_text_{idx}")
+                if send_from_downloads_flag:
+                    latest_image = get_latest_downloaded_image()
+                    if latest_image:
+                        st.write(f"📥 Using latest downloaded image: {latest_image}")
+                        st.image(latest_image, caption=f"🖼️ Downloaded Image for Box {idx}", use_column_width=True)
+                        if st.button(f"🚀 Process Downloaded Image {idx} with Mathpix", key=f"download_mathpix_button_{idx}"):
+                            with st.spinner("Processing downloaded image with Mathpix..."):
+                                extracted_text = send_to_mathpix(latest_image)
+                            if "Error" in extracted_text:
+                                st.error(f"⚠️ Mathpix API Error: {extracted_text}")
+                            else:
+                                st.text_area(f"Mathpix Extracted Text {idx}", value=extracted_text, height=100, key=f"download_mathpix_text_{idx}")
+                    else:
+                        st.error(f"🚨 No recent image found in Downloads!")
 
 # Column 2: Render MMD Output and Exclude Soft Deleted Annotations
 with col2:
