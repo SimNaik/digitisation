@@ -566,7 +566,14 @@ full_image = cv2.imread(image_path)
 temp_mmd_dir = os.path.join(os.path.expanduser("~"), "Desktop/automated/temp_mmd")
 os.makedirs(temp_mmd_dir, exist_ok=True)
 
-# --------------- Manage Annotations Section ---------------------
+# --- Manage Annotations Section ---
+import re
+import os
+import json
+import cv2
+import streamlit as st
+
+# --- Manage Annotations Section ---
 with st.sidebar:
     st.subheader("📦 Manage Annotations")
     if "lines" in page_data:
@@ -595,24 +602,58 @@ with st.sidebar:
 
                 # --- New Convert to URL Button ---
                 if st.button(f"🌐 Convert to URL {idx}", key=f"convert_url_{idx}"):
-                    if re.match(r'https?://[^\s]+', new_text):  # Check if the text is a URL
-                        # Convert text to HTML format with an image tag
-                        new_text = f'<figure><img src="{new_text}" alt=""><figcaption></figcaption></figure>'
+                    # First, check if the text is in Markdown image format (i.e. ![](url))
+                    markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)'
+                    
+                    match = re.search(markdown_image_pattern, new_text)
+                    if match:  # If the text matches the Markdown pattern for image
+                        url = match.group(1)  # Extract the URL from the match
+                        
+                        # Convert the Markdown image to HTML <figure> with <img> and an empty <figcaption>
+                        new_text = f'<figure><img src="{url}" alt=""><figcaption></figcaption></figure>'
+                        
+                        # Show the converted HTML with a text area
                         st.text_area(f"Converted HTML for Box {idx}", value=new_text, height=100, key=f"converted_text_{idx}")
-
-                        # Add a caption box below the converted text
-                        caption = st.text_input(f"Add Caption for Box {idx}", value="", key=f"caption_{idx}")
-
-                        # Update the caption if provided
+                        
+                        # Add a single caption input field
+                        caption_key = f"caption_{idx}_input"
+                        caption = st.text_input(f"Add Caption for Box {idx}", value="", key=caption_key)
+                        
+                        # If a caption is provided, update the <figcaption> tag
                         if caption:
                             new_text = new_text.replace("<figcaption></figcaption>", f"<figcaption>{caption}</figcaption>")
 
-                        # Update the annotation's text and caption in the page_data
-                        annotation["text"] = new_text
-                        annotation["caption"] = caption  # Store the caption if added
-                        with open(json_path, "w", encoding="utf-8") as f:
-                            json.dump(page_data, f, indent=4)
-                        st.success(f"Box {idx} has been converted to URL format and caption added.")
+                    # If it's just a plain URL (without Markdown syntax), process it
+                    elif re.match(r'https?://[^\s]+', new_text):  # Check if the text is a plain URL
+                        url = new_text
+                        
+                        # Convert the plain URL to HTML <figure> with <img> and an empty <figcaption>
+                        new_text = f'<figure><img src="{url}" alt=""><figcaption></figcaption></figure>'
+                        
+                        # Show the converted HTML with a text area
+                        st.text_area(f"Converted HTML for Box {idx}", value=new_text, height=100, key=f"converted_text_{idx}")
+                        
+                        # Add a single caption input field
+                        caption_key = f"caption_{idx}_input"
+                        caption = st.text_input(f"Add Caption for Box {idx}", value="", key=caption_key)
+                        
+                        # If a caption is provided, update the <figcaption> tag
+                        if caption:
+                            new_text = new_text.replace("<figcaption></figcaption>", f"<figcaption>{caption}</figcaption>")
+
+                    # If neither Markdown nor URL, show an error
+                    else:
+                        st.error("The provided text is not in a valid URL or Markdown image format.")
+
+                    # Update the annotation's text and caption in the page_data
+                    annotation["text"] = new_text
+                    annotation["caption"] = caption  # Store the caption if provided
+
+                    # Save the updated page data to JSON
+                    with open(json_path, "w", encoding="utf-8") as f:
+                        json.dump(page_data, f, indent=4)
+                    
+                    st.success(f"Box {idx} has been converted to URL format and caption added.")
 
                 # Update the annotation if any properties changed (position, size, or text)
                 if (new_x != x or new_y != y or new_w != w or new_h != h or new_text != annotation["text"]):
@@ -624,10 +665,12 @@ with st.sidebar:
                     with open(json_path, "w", encoding="utf-8") as f:
                         json.dump(page_data, f, indent=4)
                     st.rerun()
-                    # --- New Feature: Update Figure HTML with Caption ---
+
+                # --- Update Figure HTML with Caption ---
                 if re.search(r'<img\s+src="https?://[^"]+"', new_text):
                     existing_caption = annotation.get("caption", "")
-                    caption = st.text_input("Add captions here", value=existing_caption, key=f"caption_{idx}")
+                    caption_key = f"caption_{idx}_input"
+                    caption = st.text_input("Add captions here", value=existing_caption, key=caption_key)
                     if caption != existing_caption:
                         annotation["caption"] = caption
                         pattern = r'<figure>\s*<img\s+src="([^"]+)"\s+alt="[^"]*"\s*>\s*<figcaption>[^<]*</figcaption>\s*</figure>'
@@ -701,6 +744,7 @@ with st.sidebar:
                                 st.text_area(f"Mathpix Extracted Text {idx}", value=extracted_text, height=100, key=f"download_mathpix_text_{idx}")
                     else:
                         st.error(f"🚨 No recent image found in Downloads!")
+
 
 # Column 2: Render MMD Output and Exclude Soft Deleted Annotations
 with col2:
