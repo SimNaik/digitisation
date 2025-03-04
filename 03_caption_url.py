@@ -33,8 +33,7 @@ if "new_box_params" not in st.session_state:
 def extract_page_number(filename):
     parts = filename.split("_page_")
     return int(parts[1].split(".")[0]) if len(parts) > 1 and parts[1].split(".")[0].isdigit() else None
-
-# ------------------ PDF Processing Function ------------------
+    
 # ------------------ PDF Processing Function ------------------
 def process_pdf(uploaded_pdf):
     folder_name = os.path.splitext(uploaded_pdf.name)[0]
