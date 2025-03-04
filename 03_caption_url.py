@@ -166,7 +166,6 @@ if uploaded_pdf is not None:
         process_pdf(uploaded_pdf)
 
 # --------------- Data Directories ---------------
-st.sidebar.markdown("---")
 st.sidebar.header("🗂 Data Directories")
 
 if "processed_json_dir" in st.session_state and "processed_image_dir" in st.session_state:
@@ -372,7 +371,8 @@ with st.sidebar:
             
             # If "Is the text a URL?" is ticked, convert the new_box_text to HTML format and save the caption
             if is_url_new_box:
-                new_box_text = f'<figure><img src="{new_box_text}" alt="{caption}"><figcaption>"{caption}"</figcaption></figure>'
+                if not new_box_text.strip().startswith("<figure>"):
+                   new_box_text = f'<figure><img src="{new_box_text}" alt="{caption}"><figcaption>{caption}</figcaption></figure>'
                 new_box = {"cnt": new_box_cnt, "text": new_box_text, "caption": caption}
             else:
                 new_box = {"cnt": new_box_cnt, "text": new_box_text}
@@ -616,17 +616,25 @@ with st.sidebar:
                 # --- Convert to URL Button (without caption box) ---
                 if st.button(f"🌐 Convert URL to HTML {idx}", key=f"convert_url_{idx}"):
                     # First, check if the text is in Markdown image format (i.e. ![](url))
-                    markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)|https?://[^\s]+'
+                    markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)'  # For Markdown image
+                    plain_url_pattern = r'(https?://[^\s]+)'  # For plain URL
 
                     match = re.search(markdown_image_pattern, new_text)
                     if match:  # If the text matches the Markdown pattern for image
-                        url = match.group(0)  # Extract the URL from the match
-                        
-                        # Convert the Markdown image to HTML <figure> with <img> and no caption
-                        new_text = f'<figure><img src="{url}" alt=""><figcaption>""</figcaption></figure>'
-                        
+                        url = match.group(1)  # Extract the URL from the Markdown image match
+                    else:
+                        # If no Markdown pattern is matched, check for plain URL
+                        match = re.search(plain_url_pattern, new_text)
+                        if match:
+                             url = match.group(0)  # Extract the plain URL
+
+                    if url:
+                        # Convert the URL to HTML <figure> with <img> and no caption
+                        new_text = f'<figure><img src="{url}" alt=""><figcaption></figcaption></figure>'
+
                         # Show the converted HTML with a text area
                         st.text_area(f"Converted HTML for Box {idx}", value=new_text, height=100, key=f"converted_text_{idx}")
+
                         # Update the annotation's text in the page_data
                         annotation["text"] = new_text
 
@@ -652,7 +660,7 @@ with st.sidebar:
                             pattern = r'<figure>\s*<img\s+src="([^"]+)"\s+alt="[^"]*"\s*>\s*<figcaption>[^<]*</figcaption>\s*</figure>'
                             new_text_updated = re.sub(
                                 pattern,
-                                lambda m: f'<figure><img src="{m.group(1)}" alt="{caption}"><figcaption>"{caption}"</figcaption></figure>',
+                                lambda m: f'<figure><img src="{m.group(1)}" alt="{caption}"><figcaption>{caption}</figcaption></figure>',
                                 annotation["text"]
                             )
                             annotation["text"] = new_text_updated
