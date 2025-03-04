@@ -615,6 +615,7 @@ with st.sidebar:
 
                 # --- Convert to URL Button (without caption box) ---
                 if st.button(f"🌐 Convert URL to HTML {idx}", key=f"convert_url_{idx}"):
+                    url =  None
                     # First, check if the text is in Markdown image format (i.e. ![](url))
                     markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)'  # For Markdown image
                     plain_url_pattern = r'(https?://[^\s]+)'  # For plain URL
