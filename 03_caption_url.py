@@ -35,6 +35,7 @@ def extract_page_number(filename):
     return int(parts[1].split(".")[0]) if len(parts) > 1 and parts[1].split(".")[0].isdigit() else None
 
 # ------------------ PDF Processing Function ------------------
+# ------------------ PDF Processing Function ------------------
 def process_pdf(uploaded_pdf):
     folder_name = os.path.splitext(uploaded_pdf.name)[0]
     target_folder = os.path.join("pdf_uploads", folder_name)
@@ -44,6 +45,10 @@ def process_pdf(uploaded_pdf):
     with open(pdf_path, "wb") as f:
         f.write(uploaded_pdf.getbuffer())
     st.success(f"PDF saved to: {pdf_path}")
+
+    # Create the temp_mmd directory inside the target_folder (pdf_uploads/{folder_name})
+    temp_mmd_dir = os.path.join(target_folder, "temp_mmd")
+    os.makedirs(temp_mmd_dir, exist_ok=True)
 
     upload_url = "https://api.mathpix.com/v3/pdf"
     headers = {"app_id": MATHPIX_APP_ID, "app_key": MATHPIX_APP_KEY}
@@ -532,23 +537,49 @@ with col1:
         
         st.image(Image.fromarray(display_image), caption=f"📌 {matching_image}", use_column_width=True)
 
+# Use session state to store checkbox state and track page changes
+if 'open_canvas' not in st.session_state:
+    st.session_state.open_canvas = False
+
+# --- Detect page changes and reset canvas checkbox state ---
+# Track the current selected JSON index and reset the canvas state when it changes
+if 'current_json_idx' in st.session_state:
+    selected_json = st.session_state.json_files[st.session_state.current_json_idx]
+else:
+    selected_json = None
+
+# Reset the canvas checkbox when the page (or selected_json) changes
+if 'last_selected_json' not in st.session_state or selected_json != st.session_state.last_selected_json:
+    st.session_state.open_canvas = False  # Uncheck canvas when page changes
+
+# Store the current selected JSON as last selected to detect page changes
+st.session_state.last_selected_json = selected_json
+
 # Add a checkbox to toggle canvas visibility
 with st.sidebar:
-    open_canvas = st.checkbox("Open Canvas", value=False)
+    open_canvas = st.checkbox("Open Canvas", value=st.session_state.open_canvas)
 
+    # Update the session state with the current value of the checkbox
+    st.session_state.open_canvas = open_canvas
 
 # Show the canvas only when 'Open Canvas' checkbox is checked
 if open_canvas:
     st.subheader("🎨 Draw Bounding Box")
+    
     if "canvas_data" not in st.session_state:
         st.session_state.canvas_data = None
+    
+    # Key to identify the canvas uniquely for each page
     canvas_key = f"canvas_{st.session_state.current_json_idx}"
+    
     col_reset, col_space = st.columns([1, 3])
+    
     with col_reset:
         if st.button("🔄 Reset Canvas"):
             st.session_state.canvas_data = None
             st.session_state[f"reset_key_{st.session_state.current_json_idx}"] = str(os.urandom(8))
-            st.rerun()
+            st.rerun()  # Refresh the page to reset the canvas
+    
     canvas_result = st_canvas(
         fill_color="rgba(0, 0, 0, 0)",
         stroke_width=2,
@@ -560,8 +591,12 @@ if open_canvas:
         drawing_mode="rect",
         key=st.session_state.get(f"reset_key_{st.session_state.current_json_idx}", canvas_key),
     )
+
+    # Store the canvas data in session state
     if canvas_result.json_data is not None:
         st.session_state.canvas_data = canvas_result.json_data
+
+    # Display bounding box info from the canvas
     if st.session_state.canvas_data and "objects" in st.session_state.canvas_data:
         objects = st.session_state.canvas_data["objects"]
         if objects:
@@ -577,10 +612,8 @@ if open_canvas:
                 url = f"https://cdn.mathpix.com/cropped/{image_id}.jpg?height={scaled_h}&width={scaled_w}&top_left_y={scaled_y}&top_left_x={scaled_x}"
                 st.write(f"Bounding Box URL: {url}")
 
-
+# Handle image processing and other related tasks
 full_image = cv2.imread(image_path)
-temp_mmd_dir = os.path.join(os.path.expanduser("~"), "Desktop/automated/temp_mmd")
-os.makedirs(temp_mmd_dir, exist_ok=True)
 
 # --- Manage Annotations Section ---
 with st.sidebar:
