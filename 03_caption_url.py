@@ -343,8 +343,15 @@ with st.sidebar:
         new_box_width = st.slider("New Box: Width", 1, PAGE_WIDTH, st.session_state.new_box_params["width"], key="new_box_width")
         new_box_height = st.slider("New Box: Height", 1, PAGE_HEIGHT, st.session_state.new_box_params["height"], key="new_box_height")
         new_box_text = st.text_input("New Box: Text", value=st.session_state.new_box_params["text"], key="new_box_text")
+
         # New checkbox: is the text a URL?
         is_url_new_box = st.checkbox("Is the text a URL?", value=False, key="is_url_new_box")
+
+        # If the text is a URL, show the caption box
+        caption = ""
+        if is_url_new_box:
+            caption = st.text_input("Add Caption", key="caption_new_box")
+
         st.session_state.new_box_params.update({
             "x": new_box_x,
             "y": new_box_y,
@@ -353,7 +360,37 @@ with st.sidebar:
             "text": new_box_text
         })
         insert_after = st.number_input("Insert new box after index (-1 for beginning)", value=-1, step=1, key="insert_after")
-        
+
+        # Save the new box logic (only one "Save New Box" button)
+        if st.button("Save New Box", key="save_new_box"):
+            new_box_cnt = [
+                [new_box_x, new_box_y],
+                [new_box_x, new_box_y + new_box_height],
+                [new_box_x + new_box_width, new_box_y + new_box_height],
+                [new_box_x + new_box_width, new_box_y]
+            ]
+            
+            # If "Is the text a URL?" is ticked, convert the new_box_text to HTML format and save the caption
+            if is_url_new_box:
+                new_box_text = f'<figure><img src="{new_box_text}" alt="{caption}"><figcaption>"{caption}"</figcaption></figure>'
+                new_box = {"cnt": new_box_cnt, "text": new_box_text, "caption": caption}
+            else:
+                new_box = {"cnt": new_box_cnt, "text": new_box_text}
+            
+            if insert_after == -1:
+                page_data["lines"].insert(0, new_box)
+            else:
+                page_data["lines"].insert(int(insert_after) + 1, new_box)
+
+            # Save the new box to the JSON file
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(page_data, f, indent=4, ensure_ascii=False)
+
+            st.success(f"New box added at index {0 if insert_after == -1 else int(insert_after)+1}.")
+            st.session_state.adding_new_box = False
+            st.rerun()
+
+        # --- Process New Box with Mathpix ---
         if st.button("Process New Box with Mathpix", key="process_new_box"):
             image_path = os.path.join(
                 image_dir,
@@ -384,27 +421,6 @@ with st.sidebar:
                 cv2.imwrite(cropped_path, cropped_img)
                 extracted_text = send_to_mathpix(cropped_path)
                 st.text_area("New Box Mathpix Extracted Text", value=extracted_text, height=100, key="new_box_mpx")
-        
-        if st.button("Save New Box", key="save_new_box"):
-            new_box_cnt = [
-                [new_box_x, new_box_y],
-                [new_box_x, new_box_y + new_box_height],
-                [new_box_x + new_box_width, new_box_y + new_box_height],
-                [new_box_x + new_box_width, new_box_y]
-            ]
-            # If "Is the text a URL?" is ticked, convert the new_box_text to HTML format
-            if st.session_state.get("is_url_new_box"):
-                new_box_text = f'<figure><img src="{new_box_text}" alt=""><figcaption></figcaption></figure>'
-            new_box = {"cnt": new_box_cnt, "text": new_box_text}
-            if insert_after == -1:
-                page_data["lines"].insert(0, new_box)
-            else:
-                page_data["lines"].insert(int(insert_after) + 1, new_box)
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(page_data, f, indent=4, ensure_ascii=False)
-            st.success(f"New box added at index {0 if insert_after == -1 else int(insert_after)+1}.")
-            st.session_state.adding_new_box = False
-            st.rerun()
 
 # --------------- Main App: Annotation & Rendering ---------------
 def extract_page_number(filename):
@@ -593,40 +609,35 @@ with st.sidebar:
                 new_h = st.slider(f"Height {idx}", 1, page_info.get("page_height", 2924) - new_y, h, key=f"h_{idx}")
                 new_text = st.text_area(f"Text {idx}", value=annotation["text"], key=f"text_{idx}")
 
+                # --- Show Caption for URL Boxes ---
+                if "caption" in annotation and annotation["caption"]:
+                    st.text_area("Caption", value=annotation["caption"], height=50, key=f"caption_{idx}")
+
                 # --- Convert to URL Button (without caption box) ---
-                if st.button(f"🌐 Convert to URL {idx}", key=f"convert_url_{idx}"):
+                if st.button(f"🌐 Convert URL to HTML {idx}", key=f"convert_url_{idx}"):
                     # First, check if the text is in Markdown image format (i.e. ![](url))
-                    markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)'
+                    markdown_image_pattern = r'!\[\]\((https?://[^\s]+)\)|https?://[^\s]+'
 
                     match = re.search(markdown_image_pattern, new_text)
                     if match:  # If the text matches the Markdown pattern for image
-                        url = match.group(1)  # Extract the URL from the match
+                        url = match.group(0)  # Extract the URL from the match
                         
                         # Convert the Markdown image to HTML <figure> with <img> and no caption
                         new_text = f'<figure><img src="{url}" alt=""><figcaption>""</figcaption></figure>'
                         
                         # Show the converted HTML with a text area
                         st.text_area(f"Converted HTML for Box {idx}", value=new_text, height=100, key=f"converted_text_{idx}")
-                    # If it's just a plain URL (without Markdown syntax), process it
-                    elif re.match(r'https?://[^\s]+', new_text):  # Check if the text is a plain URL
-                        url = new_text
-                        
-                        # Convert the plain URL to HTML <figure> with <img> and no caption
-                        new_text = f'<figure><img src="{url}" alt=""><figcaption>""</figcaption></figure>'
-                        
-                        # Show the converted HTML with a text area
-                        st.text_area(f"Converted HTML for Box {idx}", value=new_text, height=100, key=f"converted_text_{idx}")
+                        # Update the annotation's text in the page_data
+                        annotation["text"] = new_text
+
+                        # Save the updated page data to JSON
+                        with open(json_path, "w", encoding="utf-8") as f:
+                            json.dump(page_data, f, indent=4)
+
+                        # Only show success if the conversion is successful
+                        st.success(f"Box {idx} has been converted to URL format.")
                     else:
                         st.error("The provided text is not in a valid URL or Markdown image format.")
-
-                    # Update the annotation's text in the page_data
-                    annotation["text"] = new_text
-
-                    # Save the updated page data to JSON
-                    with open(json_path, "w", encoding="utf-8") as f:
-                        json.dump(page_data, f, indent=4)
-                    
-                    st.success(f"Box {idx} has been converted to URL format.")
 
                 # --- Update Figure HTML with Caption (Only when needed) ---
                 # The caption box will be shown only when the "Change URLs to HTML format" checkbox is ticked
