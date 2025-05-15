@@ -17,8 +17,8 @@
 #Image handling and format conversion
 -pip install pillow
 
-#to install fitz operations
--pip install PyMuPDF
 
-#to install sorting operations
--pip install natsort
+pip install PyMuPDF
+
+
+pip install natsort
